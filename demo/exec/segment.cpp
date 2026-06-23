@@ -17,8 +17,10 @@
 #include <vector>
 #include <MNN/expr/Expr.hpp>
 #include <MNN/expr/ExprCreator.hpp>
+#include <MNN/expr/MathOp.hpp>
 #include <MNN/AutoTime.hpp>
 #include <MNN/Interpreter.hpp>
+#include "core/TensorUtils.hpp"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -40,27 +42,31 @@ int main(int argc, const char* argv[]) {
         return 0;
     }
     ScheduleConfig config;
+    config.type = MNN_FORWARD_CPU;
+    config.numThread = 4;
     auto session = net->createSession(config);
     auto input = net->getSessionInput(session, nullptr);
     auto shape = input->shape();
+    // Detect NHWC format (common for TFLite-converted models) and extract correct dims
+    auto fmt = TensorUtils::getDescribe(input)->dimensionFormat;
+    int size_w, size_h, bpp;
+    if (fmt == MNN_DATA_FORMAT_NHWC) {
+        // NHWC: [N, H, W, C]
+        bpp    = shape[3];  // C
+        size_h = shape[1];  // H
+        size_w = shape[2];  // W
+    } else {
+        // NCHW: [N, C, H, W]
+        bpp    = shape[1];  // C
+        size_h = shape[2];  // H
+        size_w = shape[3];  // W
+    }
     if (shape[0] != 1) {
         shape[0] = 1;
         net->resizeTensor(input, shape);
         net->resizeSession(session);
     }
     {
-        int size_w   = 0;
-        int size_h   = 0;
-        int bpp      = 0;
-        bpp = shape[1];
-        size_h = shape[2];
-        size_w = shape[3];
-        if (bpp == 0)
-            bpp = 1;
-        if (size_h == 0)
-            size_h = 1;
-        if (size_w == 0)
-            size_w = 1;
         MNN_PRINT("input: w:%d , h:%d, bpp: %d\n", size_w, size_h, bpp);
 
         auto inputPatch = argv[2];
@@ -72,22 +78,28 @@ int main(int argc, const char* argv[]) {
         }
         MNN_PRINT("origin size: %d, %d\n", width, height);
         Matrix trans;
-        // Set scale, from dst scale to src
-        trans.setScale((float)(width-1) / (size_w-1), (float)(height-1) / (size_h-1));
+        // Center-aligned resize matching Python cv.resize:
+        // fx = iw/ow, fy = ih/oh, then translate by 0.5*(fx-1)
+        float fx = (float)width / size_w;
+        float fy = (float)height / size_h;
+        trans.postScale(fx, fy);
+        trans.postTranslate(0.5f * (fx - 1.0f), 0.5f * (fy - 1.0f));
         ImageProcess::Config config;
         config.filterType = CV::BILINEAR;
-        //        float mean[3]     = {103.94f, 116.78f, 123.68f};
-        //        float normals[3] = {0.017f, 0.017f, 0.017f};
-        float mean[3]     = {127.5f, 127.5f, 127.5f};
-        float normals[3] = {0.00785f, 0.00785f, 0.00785f};
+        float mean[3]     = {103.94f, 116.78f, 123.68f};
+        float normals[3] = {0.017f, 0.017f, 0.017f};
         ::memcpy(config.mean, mean, sizeof(mean));
         ::memcpy(config.normal, normals, sizeof(normals));
         config.sourceFormat = RGBA;
-        config.destFormat   = RGB;
+        config.destFormat   = BGR;
 
         std::shared_ptr<ImageProcess> pretreat(ImageProcess::create(config));
         pretreat->setMatrix(trans);
-        pretreat->convert((uint8_t*)inputImage, width, height, 0, input);
+        // Use raw-pointer convert with explicit output dimensions,
+        // works correctly for both NCHW and NHWC session tensors
+        pretreat->convert((uint8_t*)inputImage, width, height, 0,
+                          input->host<float>(), size_w, size_h, bpp, 0,
+                          halide_type_of<float>());
         stbi_image_free(inputImage);
     }
     // Run model
@@ -114,16 +126,14 @@ int main(int argc, const char* argv[]) {
 
         const int humanIndex = 15;
         output = _Reshape(output, {-1, channel});
-        auto kv = _TopKV2(output, _Scalar<int>(1));
-        // Use indice in TopKV2's C axis
-        auto index = kv[1];
+        // Use ArgMax to get per-pixel class index (matching Python's argmax)
+        auto index = _ArgMax(output, -1);
         // If is human, set 255, else set 0
         auto mask = _Select(_Equal(index, _Scalar<int>(humanIndex)), _Scalar<int>(255), _Scalar<int>(0));
 
-        //If need faster, use this code
-        //auto mask = _Equal(index, _Scalar<int>(humanIndex)) * _Scalar<int>(255);
-
         mask = _Cast<uint8_t>(mask);
+        // Reshape to [height, width] for grayscale image output (matching Python)
+        mask = _Reshape(mask, {height, width});
         stbi_write_png(argv[3], width, height, 1, mask->readMap<uint8_t>(), width);
     }
     return 0;
