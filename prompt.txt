@@ -1,0 +1,2 @@
+<img>/home/leixian/MNN/demo/model/MobileNet/testcat.jpg</img>介绍一下图片里的内容
+中国的首都是哪里？
