@@ -22,7 +22,9 @@ CPU 基础实现（已完成）
 │
 ├─ Vulkan 后端
 │
-└─ CUDA 后端
+├─ CUDA 后端
+│
+└─ QNN 后端（Qualcomm AI Engine）
 ```
 
 每完成一个后端，都可以用步骤 4 的单元测试来验证正确性。
@@ -230,6 +232,188 @@ static bool gResistor = []() {
 ## 5.5 CUDA 后端
 
 在 `source/backend/cuda/execution/` 下添加 `.cu` 和 `.cuh` 文件，编写 CUDA kernel 并注册。
+
+---
+
+## 5.6 QNN 后端（Qualcomm AI Engine）
+
+> **关键差异**：QNN 后端采用**显式注册**模式，与其他所有后端（自动注册）完全不同。缺失任何一步都会导致运行时 "Not registered type N" 错误。
+
+### 5.6.1 QNN 架构概述
+
+```
+source/backend/qnn/
+├── backend/          ← QNNBackend 核心（图构建、tensor 管理）
+│   ├── QNNBackend.cpp / .hpp
+│   ├── QNNUtils.cpp / .hpp     ← **算子注册入口 registerQNNOps()**
+│   └── QNNWrapper.cpp / .hpp
+├── execution/        ← 各算子实现（每个 Op 一个 .cpp + .hpp）
+│   ├── QNNCommonExecution.cpp / .hpp   ← 基类
+│   ├── QNNConvolution.cpp / .hpp
+│   ├── QNNPool.cpp / .hpp
+│   └── ...
+└── convertor/        ← 离线转换模式
+```
+
+### 5.6.2 创建算子实现文件
+
+在 `source/backend/qnn/execution/` 下创建 `QNNMyOp.hpp` 和 `QNNMyOp.cpp`。
+
+**模板 — QNNMyOp.hpp**：
+
+```cpp
+#ifndef MNN_QNNMYOP_HPP
+#define MNN_QNNMYOP_HPP
+
+#include "QNNCommonExecution.hpp"
+#include "QnnTypes.h"
+
+namespace MNN {
+namespace QNN {
+#ifdef ENABLE_QNN_ONLINE_FINALIZE
+
+class QNNMyOp : public QNNCommonExecution {
+public:
+    QNNMyOp(Backend *backend, const Op *op) : QNNCommonExecution(backend, op) {}
+    virtual ErrorCode onEncode(const std::vector<Tensor *> &inputs,
+                               const std::vector<Tensor *> &outputs) override;
+};
+#endif
+} // namespace QNN
+} // namespace MNN
+
+#endif
+```
+
+**模板 — QNNMyOp.cpp**：
+
+```cpp
+#include "QNNMyOp.hpp"
+
+namespace MNN {
+namespace QNN {
+#ifdef ENABLE_QNN_ONLINE_FINALIZE
+
+ErrorCode QNNMyOp::onEncode(const std::vector<Tensor *> &inputs,
+                             const std::vector<Tensor *> &outputs) {
+    // Step 1: 清理上次调用的状态
+    mParams.clear();
+    mInputs.clear();
+    mOutputs.clear();
+
+    // Step 2: 设置 QNN 算子类型名（见 QnnOpDef.h）
+    mNodeType = "QnnOpTypeName";  // 如 "ResizeBilinear", "Concat", "PoolAvg2d"
+
+    // Step 3: 创建参数（使用基类辅助方法）
+    this->createParamScalar("param_name", (uint32_t)value);     // 标量参数
+    // this->createParamTensor("param_name", dtype, dims, ptr);  // 张量参数（可选）
+
+    // Step 4: 添加节点到图（自动处理 inputs/outputs 的 tensor 获取）
+    this->addNodeCommon(inputs, outputs);
+
+    return NO_ERROR;
+}
+
+// Step 5: 创建 Creator 并注册（参见 5.6.3）
+class QNNMyOpCreator : public QnnBackend::Creator {
+public:
+    virtual QNNCommonExecution * onCreate(const std::vector<Tensor*>& inputs,
+                                          const std::vector<Tensor*>& outputs,
+                                          const MNN::Op* op,
+                                          Backend* backend) const override {
+        return new QNNMyOp(backend, op);
+    }
+};
+
+REGISTER_QNN_OP_CREATOR(QNNMyOpCreator, OpType_MyOp)
+#endif
+} // namespace QNN
+} // namespace MNN
+```
+
+### 5.6.3 QNN 三步显式注册（⚠️ 最关键！）
+
+与其他后端不同，QNN **不会**自动注册算子。必须手动完成以下三步：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Step A: 算子 .cpp 中调用 REGISTER_QNN_OP_CREATOR           │
+│          → 生成函数 void ___Creator__OpType__()              │
+├─────────────────────────────────────────────────────────────┤
+│  Step B: QNNUtils.hpp 中添加 extern 声明                     │
+│          → extern void ___Creator__OpType__();               │
+├─────────────────────────────────────────────────────────────┤
+│  Step C: QNNUtils.cpp 的 registerQNNOps() 中显式调用         │
+│          → ___Creator__OpType__();                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**缺失任何一步 = 编译通过但运行时报 "Not registered type N"**。
+
+这是因为 QNN 运行时通过 dlopen 动态加载，静态初始化器不可靠，所以必须在 `registerQNNOps()` 中显式调用每个注册函数。
+
+### 5.6.4 参数创建辅助方法
+
+基类 `QNNCommonExecution` 提供以下方法：
+
+```cpp
+// 标量参数
+this->createParamScalar("name", boolValue);
+this->createParamScalar("name", (uint32_t)intValue);
+this->createParamScalar("name", (int)intValue);
+this->createParamScalar("name", (float)floatValue);
+
+// 张量参数（需要拷贝数据到 QNN）
+this->createParamTensor("name", QNN_DATATYPE_UINT_32, {dims}, (void*)dataPtr);
+
+// 添加节点到图（自动获取 inputs/outputs 的 native tensor）
+this->addNodeCommon(inputs, outputs);           // 所有 input/output
+this->addNodeCommon(inputs, outputs, N, M);     // 前 N 个 input, 前 M 个 output
+```
+
+### 5.6.5 MNN 参数到 QNN 参数的映射
+
+在 `onEncode` 中通过 `mOp->main_as_Xxx()` 获取 MNN 算子参数，然后映射为 QNN 参数。参考 `QNNPool.cpp`、`QNNBinary.cpp` 等现有实现。
+
+**常用 QNN 算子类型常量**（定义在 `<QNN/QnnOpDef.h>`）：
+
+| QNN 宏 | 字符串值 | 说明 |
+|--------|---------|------|
+| `QNN_OP_RESIZE_BILINEAR` | `"ResizeBilinear"` | 双线性插值 |
+| `QNN_OP_RESIZE` | `"Resize"` | 通用 resize（支持 nearest/linear/cubic） |
+| `QNN_OP_CONCAT` | `"Concat"` | 拼接 |
+| `QNN_OP_POOL_AVG_2D` | `"PoolAvg2d"` | 平均池化 |
+| `QNN_OP_RELU` | `"Relu"` | ReLU 激活 |
+
+完整列表见 `/mnt/d/SoftWare/qairt/<version>/include/QNN/QnnOpDef.h`。
+
+### 5.6.6 格式转换注意事项
+
+- **NC4HW4 → NHWC**：MNN 内部使用 NC4HW4 格式，QNN 使用 NHWC。tensor 的 shape 通过 `getNHWCShape()` 转换。
+- **Axis 转换**：如果算子涉及 axis 参数（如 Concat、Reduce），需要检查是否需要从 NC4HW4 约定转换为 NHWC 约定。4D 映射：`{0→0, 1→3, 2→1, 3→2}`
+- **格式检测**：通过 `TensorUtils::getDescribe(tensor)->dimensionFormat` 获取当前格式，仅对 `MNN_DATA_FORMAT_NC4HW4` 进行转换。
+
+### 5.6.7 编译 & 测试
+
+```bash
+# 编译
+cd build
+cmake --build . --target MNN2QNNModel -j8
+
+# 测试（注意: 输出目录必须预先存在！否则会 SIGSEGV）
+mkdir -p ./output
+./MNN2QNNModel /path/to/qnn/sdk soc_id arch_id model.mnn ./output/ 1 input_shape
+```
+
+### 5.6.8 调试技巧
+
+| 问题 | 排查方法 |
+|------|---------|
+| `Not registered type N` | 检查三步注册是否完整：extern 声明 + registerQNNOps() 调用 + REGISTER_QNN_OP_CREATOR |
+| `Don't support type N` | `onCreate` 返回了 nullptr，检查 Creator 实现 |
+| QNN 图验证失败 | 检查参数映射是否正确、axis 是否转换、tensor shape 是否匹配 |
+| SIGSEGV (NULL fp) | 输出目录不存在，`mkdir -p` 提前创建 |
+| SIGSEGV (其他) | 用 `gdb -batch -ex run -ex bt --args ...` 定位 |
 
 ---
 

@@ -1,0 +1,3 @@
+- [QNN Op Registration Pattern](qnn-op-registration-pattern.md) — QNN backend requires explicit 3-step registration (macro + extern + call)
+- [QNN Concat Axis NC4HW4 to NHWC](qnn-concat-axis-nc4hw4-to-nhwc.md) — Concat axis must be converted from MNN NC4HW4 to QNN NHWC convention
+- [QNN Interp ResizeBilinear Support](qnn-interp-resizebilinear-support.md) — Added QNN support for Interp op (ResizeBilinear/Nearest/Cubic)

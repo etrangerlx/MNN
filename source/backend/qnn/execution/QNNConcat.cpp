@@ -36,6 +36,23 @@ ErrorCode QNNConcat::onEncode(const std::vector<Tensor *> &inputs, const std::ve
         axis = dim + axis;
     }
     MNN_ASSERT(axis >= 0 && axis < dim);
+
+    // Convert axis from MNN internal format (NC4HW4) to QNN format (NHWC).
+    // NC4HW4 4D: [batch, channel_blocks, height, width]
+    // NHWC 4D:    [batch, height, width, channels]
+    // Mapping: 0→0, 1→3, 2→1, 3→2
+    auto dataFormat = TensorUtils::getDescribe(inputs[0])->dimensionFormat;
+    if (dataFormat == MNN_DATA_FORMAT_NC4HW4) {
+        if (dim == 4) {
+            int axisMap[] = {0, 3, 1, 2};
+            axis = axisMap[axis];
+        } else if (dim == 5) {
+            // NC4HW4 5D: [batch, extra, channel_blocks, height, width]
+            // NHWC 5D:   [batch, extra, height, width, channels]
+            int axisMap[] = {0, 1, 4, 2, 3};
+            axis = axisMap[axis];
+        }
+    }
     this->createParamScalar("axis", (uint32_t)axis);
 
     this->addNodeCommon(inputs, outputs);
