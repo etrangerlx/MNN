@@ -1,0 +1,117 @@
+{
+    // ctrl + shift + P,輸入:Tasks: Run Task
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "mkdir build",
+            "type": "shell",
+            "command": "mkdir",
+            "args": ["-p", "build"],  // 使用 -p 参数避免目录已存在时报错
+            "options": {
+                "cwd": "${workspaceFolder}"  // 在项目根目录执行
+            }
+        },
+        {
+            "label": "cmake configure",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-S","..","-DCMAKE_BUILD_TYPE=Debug",
+                "-DMNN_QNN=ON",
+                "-DMNN_QNN_CONVERT_MODE=ON",
+                "-DMNN_BUILD_TOOLS=ON",
+                "-DMNN_BUILD_LLM=ON",
+                // "-DLLM_SUPPORT_AUDIO=ON",
+                // "-DMNN_BUILD_AUDIO=ON",
+                "-DLLM_SUPPORT_VISION=ON",
+                "-DMNN_BUILD_OPENCV=ON",
+                "-DMNN_IMGCODECS=ON",
+                "-DMNN_BUILD_CONVERTER=ON",
+                "-DMNN_BUILD_DEMO=ON",
+                "-DMNN_BUILD_TEST=ON",
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/build",
+                "env": {
+                    "QNN_SDK_ROOT": "/mnt/d/SoftWare/qairt/2.45.0.260326/"
+                }
+            },
+            "dependsOn": "mkdir build"
+        },
+        {
+            "label": "cmake build",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",".",
+                "-j8"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/build",
+                "env": {
+                    "QNN_SDK_ROOT": "/mnt/d/SoftWare/qairt/2.45.0.260326/"
+                }
+            },
+            "dependsOn": "cmake configure",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "android-clean",
+            "type": "shell",
+            "command": "rm",
+            "args": ["-rf", "build-android"],  // 使用 -p 参数避免目录已存在时报错
+            "options": {
+                "cwd": "${workspaceFolder}"  // 在项目根目录执行
+            }
+        },
+        {
+            "label": "android-mkdir",
+            "type": "shell",
+            "command": "mkdir",
+            "args": ["-p", "build-android"],  // 使用 -p 参数避免目录已存在时报错
+            "options": {
+                "cwd": "${workspaceFolder}"  // 在项目根目录执行
+            }
+        },
+        {
+            "label": "android-configure",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "cmake -S . -B build-android -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-21"
+            ],
+            // "command": "cmake",
+            // "args": [
+            //     "-S", ".",
+            //     "-B", "build-android",
+            //     "-DCMAKE_TOOLCHAIN_FILE=${env:ANDROID_NDK}/build/cmake/android.toolchain.cmake",
+            //     "-DANDROID_ABI=arm64-v8a",
+            //     "-DANDROID_PLATFORM=android-21",
+            //     "-DCMAKE_BUILD_TYPE=Release"
+            // ],
+            "dependsOn": ["android-mkdir"],
+            "options": {
+                "env": {
+                    "ANDROID_NDK": "/home/df/android-ndk-r26c"
+                }
+            }
+        },
+        {
+            "label": "android-build",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build", "build-android"
+            ],
+            "dependsOn": ["android-configure"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
