@@ -19,6 +19,9 @@ list(APPEND MNN_EXEC_DEMOS multiPose.out)
 add_executable(segment.out ${CMAKE_CURRENT_LIST_DIR}/segment.cpp)
 list(APPEND MNN_EXEC_DEMOS segment.out)
 
+add_executable(face_det.out ${CMAKE_CURRENT_LIST_DIR}/face_det.cpp)
+list(APPEND MNN_EXEC_DEMOS face_det.out)
+
 add_executable(expressDemo.out ${CMAKE_CURRENT_LIST_DIR}/expressDemo.cpp)
 list(APPEND MNN_EXEC_DEMOS expressDemo.out)
 
