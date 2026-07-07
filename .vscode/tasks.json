@@ -33,7 +33,7 @@
             "options": {
                 "cwd": "${workspaceFolder}/build",
                 "env": {
-                    "QNN_SDK_ROOT": "/mnt/d/SoftWare/qairt/2.45.0.260326/"
+                    "QNN_SDK_ROOT": "/workspace/software/qnn_sdk_v2.42.0_auto_lnx/qaisw-v2.42.0.251225135753_193295-auto-lnx"
                 }
             },
             "dependsOn": "mkdir build"
@@ -49,7 +49,7 @@
             "options": {
                 "cwd": "${workspaceFolder}/build",
                 "env": {
-                    "QNN_SDK_ROOT": "/mnt/d/SoftWare/qairt/2.45.0.260326/"
+                    "QNN_SDK_ROOT": "/workspace/software/qnn_sdk_v2.42.0_auto_lnx/qaisw-v2.42.0.251225135753_193295-auto-lnx"
                 }
             },
             "dependsOn": "cmake configure",

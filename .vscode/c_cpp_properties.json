@@ -4,9 +4,12 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/mnt/d/SoftWare/qairt/2.45.0.260326/include/QNN"
+                "/workspace/software/qnn_sdk_v2.42.0_auto_lnx/qaisw-v2.42.0.251225135753_193295-auto-lnx/include/QNN"
             ],
-            "defines": [],
+            "defines": [
+                "MNN_QNN",
+                "ENABLE_QNN_ONLINE_FINALIZE"
+            ],
             "compilerPath": "/usr/bin/clang",
             "cStandard": "c17",
             "cppStandard": "c++14",
