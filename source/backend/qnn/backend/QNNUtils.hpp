@@ -85,6 +85,7 @@ extern void ___QNNConcatCreator__OpType_Pack__();
 extern void ___QNNConcatCreator__OpType_Unpack__();
 extern void ___QNNConvDepthwiseCreator__OpType_ConvolutionDepthwise__();
 extern void ___QNNConvolutionCreator__OpType_Convolution__();
+extern void ___QNNDeconvolutionCreator__OpType_Deconvolution__();
 extern void ___QNNFlattenCreator__OpType_Flatten__();
 extern void ___QNNLayerNormCreator__OpType_LayerNorm__();
 extern void ___QNNPaddingCreator__OpType_Padding__();

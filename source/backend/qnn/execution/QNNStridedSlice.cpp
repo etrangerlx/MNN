@@ -41,22 +41,7 @@ ErrorCode QNNStridedSlice::onEncode(const std::vector<Tensor *> &inputs, const s
         if (axis < 0) {
             axis = inputTensor->dimensions() + axis;
         }
-        int64_t slice_num = 0;
-        if (param->slicePoints() != nullptr) {
-            if (param->slicePoints()->size() < outputs.size()) {
-                slice_num = static_cast<int64_t>(outputs.size());
-            } else if (param->slicePoints()->size() == 1) {
-                slice_num = static_cast<int64_t>(param->slicePoints()->Get(0));
-            } else {
-                slice_num = static_cast<int64_t>(param->slicePoints()->size());
-            }
-        } else {
-            slice_num = static_cast<int64_t>(outputs.size());
-        }
         auto shape = inputShape;
-        #ifdef QNN_VERBOSE
-        MNN_PRINT("slice:%d %d %d %d, axis:%d, slice_num:%d output_num:%d, dim:%d\n", shape[0], shape[1], shape[2], shape[3], axis, slice_num, outputs.size(), mInputDim);
-        #endif
         int realAxis = axis;
         if (TensorUtils::getDescribe(inputs[0])->dimensionFormat == MNN_DATA_FORMAT_NC4HW4) {
             if (axis > 1) {
@@ -66,16 +51,91 @@ ErrorCode QNNStridedSlice::onEncode(const std::vector<Tensor *> &inputs, const s
             }
         }
 
-        int slice_size = inputs[0]->length(axis) / slice_num;
-        for(int index = 0; index < slice_num; index++) {
+        // Determine slice sizes for each output based on sourceType.
+        // - CAFFE: slicePoints are cumulative split positions.
+        // - TF/Torch (size > 1): slicePoints are output sizes.
+        // - TF/Torch (null or size 1): even split.
+        int inputDimSize = inputs[0]->length(axis);
+        int numOutputs = (int)outputs.size();
+        std::vector<int> sliceSizes;
+        auto sourceType = param->sourceType();
+        auto slicePoints = param->slicePoints();
+
+        if (sourceType == MNN::NetSource_CAFFE) {
+            // CAFFE: slicePoints are cumulative split positions
+            int previous = 0;
+            if (slicePoints != nullptr) {
+                for (int i = 0; i < slicePoints->size() && (int)sliceSizes.size() < numOutputs; ++i) {
+                    int splitPos = slicePoints->Get(i);
+                    sliceSizes.push_back(splitPos - previous);
+                    previous = splitPos;
+                }
+            }
+            // Last output gets the remainder
+            if ((int)sliceSizes.size() < numOutputs) {
+                sliceSizes.push_back(inputDimSize - previous);
+            }
+        } else if (slicePoints == nullptr || slicePoints->size() == 1) {
+            // TF/Torch: single or no slicePoint → even split
+            int numSplits = numOutputs;
+            int splitSize = inputDimSize / std::max(1, numSplits);
+            if (slicePoints != nullptr && slicePoints->size() == 1) {
+                if (sourceType == MNN::NetSource_TORCH) {
+                    // Torch: single value is split_size
+                    splitSize = slicePoints->Get(0);
+                    numSplits = inputDimSize / splitSize;
+                } else {
+                    // TF: single value is num_splits (override if != outputSize)
+                    if (slicePoints->Get(0) != numOutputs) {
+                        numSplits = slicePoints->Get(0);
+                    }
+                    splitSize = inputDimSize / std::max(1, numSplits);
+                }
+            }
+            numSplits = std::min(numSplits, numOutputs);
+            for (int i = 0; i < numSplits; i++) {
+                sliceSizes.push_back(splitSize);
+            }
+        } else {
+            // TF/Torch: slicePoints are output sizes (possibly with -1 as unknown)
+            int numSplits = std::min((int)slicePoints->size(), numOutputs);
+            int knownSize = 0;
+            int unknownIdx = -1;
+            for (int i = 0; i < numSplits; i++) {
+                int len = slicePoints->Get(i);
+                if (len != -1) {
+                    sliceSizes.push_back(len);
+                    knownSize += len;
+                } else {
+                    sliceSizes.push_back(0); // placeholder
+                    unknownIdx = i;
+                }
+            }
+            // Handle -1 placeholder (infer from remaining size)
+            if (unknownIdx >= 0) {
+                sliceSizes[unknownIdx] = inputDimSize - knownSize;
+            }
+        }
+
+        #ifdef QNN_VERBOSE
+        MNN_PRINT("slice:%d %d %d %d, axis:%d, realAxis:%d, output_num:%d, dim:%d, sourceType:%d\n",
+                  shape[0], shape[1], shape[2], shape[3], axis, realAxis, numOutputs, mInputDim, (int)sourceType);
+        #endif
+
+        // Create StridedSlice for each output
+        int offset = 0;
+        int numSlices = std::min((int)sliceSizes.size(), numOutputs);
+        for (int index = 0; index < numSlices; index++) {
             std::vector<int> rangeData(mInputDim * 3, 0);
             for (int i = 0; i < mInputDim; i++) {
                 rangeData[3 * i + 0] = 0;
                 rangeData[3 * i + 1] = shape[i];
                 rangeData[3 * i + 2] = 1;
             }
-            rangeData[3 * realAxis + 0] = index * slice_size;
-            rangeData[3 * realAxis + 1] = index * slice_size + slice_size;
+            rangeData[3 * realAxis + 0] = offset;
+            rangeData[3 * realAxis + 1] = offset + sliceSizes[index];
+            offset += sliceSizes[index];
+
             this->createParamTensor("ranges", QNN_DATATYPE_INT_32, {(uint32_t) mInputDim, 3}, (void *) rangeData.data(), std::to_string(index));
 
             // Add Node.
@@ -239,4 +299,3 @@ REGISTER_QNN_OP_CREATOR(QNNStridedSliceCreator, OpType_Slice)
 #endif
 } // end namespace QNN
 } // end namespace MNN
-

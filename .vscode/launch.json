@@ -28,6 +28,35 @@
             // "miDebuggerPath": "/usr/bin/gdb"
         },
         {
+            "name": "MNNConvert_face_det",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/MNNConvert",
+            "args": ["-f", "ONNX", 
+            "--modelFile", "${workspaceFolder}/demo/model/face_det.onnx", 
+            "--MNNModel", "${workspaceFolder}/demo/model/face_det.mnn",
+             "--bizCode", "MNN"],
+            "cwd": "${workspaceFolder}/build/",
+            // "preLaunchTask": "build",  // 先编译，后调试
+            // "MIMode": "gdb",
+            // "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "MNN2QNN_face_det",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/MNN2QNNModel",
+            "args": ["/workspace/software/qnn_sdk_v2.42.0_auto_lnx/qaisw-v2.42.0.251225135753_193295-auto-lnx", 
+            "72", "81",
+            "${workspaceFolder}/demo/model/face_det.mnn", 
+            "${workspaceFolder}/demo/model/qnn_output",
+             "1", "1x3x320x320"],
+            "cwd": "${workspaceFolder}/build/",
+            // "preLaunchTask": "build",  // 先编译，后调试
+            // "MIMode": "gdb",
+            // "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
             "name": "MNNConvert",
             "type": "cppdbg",
             "request": "launch",

@@ -43,7 +43,10 @@ ErrorCode QNNConcat::onEncode(const std::vector<Tensor *> &inputs, const std::ve
     // Mapping: 0→0, 1→3, 2→1, 3→2
     auto dataFormat = TensorUtils::getDescribe(inputs[0])->dimensionFormat;
     if (dataFormat == MNN_DATA_FORMAT_NC4HW4) {
-        if (dim == 4) {
+        if (dim == 3) {
+            int axisMap[] = {0, 2, 1};
+            axis = axisMap[axis];
+        } else if (dim == 4) {
             int axisMap[] = {0, 3, 1, 2};
             axis = axisMap[axis];
         } else if (dim == 5) {
