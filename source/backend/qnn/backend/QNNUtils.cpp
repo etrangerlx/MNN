@@ -156,6 +156,7 @@ void registerQNNOps() {
     ___QNNDeQuantCreator__OpType_Int8ToFloat__();
     ___QNNTopKV2Creator__OpType_TopKV2__();
     ___QNNInterpCreator__OpType_Interp__();
+    ___QNNDeconvolutionCreator__OpType_Deconvolution__();
 }
 
 Tensor::DimensionType gQnnTensorDimType = Tensor::TENSORFLOW;

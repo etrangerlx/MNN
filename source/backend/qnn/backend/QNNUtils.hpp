@@ -114,6 +114,7 @@ extern void ___QNNQuantCreator__OpType_FloatToInt8__();
 extern void ___QNNDeQuantCreator__OpType_Int8ToFloat__();
 extern void ___QNNTopKV2Creator__OpType_TopKV2__();
 extern void ___QNNInterpCreator__OpType_Interp__();
+extern void ___QNNDeconvolutionCreator__OpType_Deconvolution__();
 
 void registerQNNOps();
 

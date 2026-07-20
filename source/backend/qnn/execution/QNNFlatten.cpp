@@ -113,7 +113,7 @@ void QNNFlatten::ReshapeTranspose(const std::vector<Tensor *> &inputs, const std
     }
 
     // nchw -> nhwc
-    {
+    if (permuteOutput) {
         mNodeType = "Transpose";
         std::string name = mNodeName + "_output_transpose";
         mParams.clear();
