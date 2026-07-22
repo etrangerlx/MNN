@@ -51,7 +51,7 @@ ErrorCode QNNInterp::onEncode(const std::vector<Tensor *> &inputs, const std::ve
 
     this->createParamScalar("interpolation_mode", interpolationMode);
     this->createParamScalar("transformation_mode", transformationMode);
-    this->createParamScalar("exclude_outside", (uint32_t)0);
+    this->createParamScalar("exclude_outside", false);
 
     if (resizeType == 1 || resizeType == 4) {
         uint32_t nearestMode = (resizeType == 4)
