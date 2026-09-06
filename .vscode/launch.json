@@ -106,6 +106,19 @@
                 "--path","G:/Models/Qwen2-0.5B-Instruct","--export", "mnn"],
             "cwd": "${workspaceFolder}/transformers/llm/export/",
 
+        },
+        {
+                    "name": "py-mnn2qnn",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/transformers/llm/export/npu/generate_llm_qnn.py",
+            "args": [       
+                "--model","./models/Qwen3.5-0.8B","--dsp_arch=v68","--soc_id=39","--image_sizes", "224x224,384x384,512x512"],
+            "cwd": "${workspaceFolder}/transformers/llm/export/",
+            "env": {
+                "QNN_SDK_ROOT":"/mnt/d/SoftWare/qairt/2.45.0.260326",
+                "QNN_ROOT":"/mnt/d/SoftWare/qairt/2.45.0.260326"
+            }
         }
     ]
 }

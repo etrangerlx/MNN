@@ -4,7 +4,9 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/workspace/software/qnn_sdk_v2.42.0_auto_lnx/qaisw-v2.42.0.251225135753_193295-auto-lnx/include/QNN"
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/tools/converter/include",
+                "/mnt/d/SoftWare/qairt/2.45.0.260326/include/QNN"
             ],
             "defines": [
                 "MNN_QNN",
