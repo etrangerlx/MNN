@@ -17,6 +17,20 @@
             // "miDebuggerPath": "/usr/bin/gdb"
         },
         {
+            "name": "cpp-mls",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/mls",
+            "args": [
+                "run", 
+                "${workspaceFolder}/transformers/llm/export/models/Qwen3.5-0.8B/config.json",
+                "-pf","${workspaceFolder}/prompt.txt"],
+            "cwd": "${workspaceFolder}/build/",
+            "preLaunchTask": "cmake build",  // 先编译，后调试
+            // "MIMode": "gdb",
+            // "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
             "name": "Test—CPP",
             "type": "cppdbg",
             "request": "launch",
@@ -103,7 +117,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/transformers/llm/export/llmexport.py",
             "args": [
-                "--path","G:/Models/Qwen2-0.5B-Instruct","--export", "mnn"],
+                "--path","/mnt/g/Models/Qwen3.5-0.8B","--dst_path","./models/Qwen3.5-0.8B","--export", "mnn"],
             "cwd": "${workspaceFolder}/transformers/llm/export/",
 
         },

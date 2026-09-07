@@ -29,6 +29,7 @@
                 "-DMNN_BUILD_CONVERTER=ON",
                 "-DMNN_BUILD_DEMO=ON",
                 "-DMNN_BUILD_TEST=ON",
+                "-DBUILD_MLS=ON"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/build",
