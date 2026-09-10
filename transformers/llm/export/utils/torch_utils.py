@@ -106,8 +106,11 @@ def _quant_dispatch(weight, quant_bit, quant_block, symmetric, awq, hqq):
             pass
     return _quant_on_device(weight, quant_bit, quant_block, symmetric, awq, hqq)
 
-# Max elements per chunk for quantization (avoid OOM on large embedding tables)
-_QUANT_MAX_ELEMENTS = 256 * 1024 * 1024  # 256M elements
+# Max elements per chunk for quantization (avoid OOM on large embedding tables).
+# 64M elements keeps the per-chunk transient peak ~1GB even for the tied
+# embedding/lm_head table (e.g. 248320x1024 ~ 254M elements), which is what
+# previously blew past the 256M threshold and OOM'd 8GB hosts.
+_QUANT_MAX_ELEMENTS = 64 * 1024 * 1024  # 64M elements
 
 def quant(weight, quant_bit, quant_block, symmetric, awq, hqq):
     oc, ic = weight.shape
