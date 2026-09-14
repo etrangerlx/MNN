@@ -6,6 +6,7 @@
 //
 
 #include "generate.hpp"
+#include <limits>
 
 using namespace MNN::Express;
 namespace MNN {
@@ -56,6 +57,28 @@ std::vector<VARP> MtpGeneration::mtpForward(Express::VARP input_embeds, VARP hid
     int seq_len         = input_embeds->getInfo()->dim[0];
     mMtpMeta->add          = seq_len;
     auto attention_mask = mLlm->gen_attention_mask(seq_len);
+    // When causal-sentinel optimization is active, gen_attention_mask may return a
+    // 0-D scalar. The MTP model graph still contains Rank(attention_mask) ops that
+    // assume a 5-D shape [2,1,1,seq_len,kv_seq_len]; a 0-D tensor makes Rank
+    // output 0 and then 0%0 crashes. Substitute a correctly-shaped dummy.
+    if (attention_mask->getInfo()->dim.empty()) {
+        int kv_seq_len = mContext->all_seq_len + seq_len;
+        int cache_offset = kv_seq_len - seq_len;
+        attention_mask = _Input({2, 1, 1, seq_len, kv_seq_len}, NCHW, halide_type_of<float>());
+        auto maskPtr = attention_mask->writeMap<float>();
+        for (int b = 0; b < 2; b++) {
+            for (int q = 0; q < seq_len; q++) {
+                for (int k = 0; k < kv_seq_len; k++) {
+                    int idx = ((b * 1) * seq_len + q) * kv_seq_len + k;
+                    if (k <= cache_offset + q) {
+                        maskPtr[idx] = 0.0f;
+                    } else {
+                        maskPtr[idx] = -std::numeric_limits<float>::infinity();
+                    }
+                }
+            }
+        }
+    }
     auto position_ids = mLlm->gen_position_ids(seq_len);
 
     VARP logitsIndex;
@@ -132,7 +155,21 @@ void MtpGeneration::generate(GenerationParams& param) {
         input_embeds = mLlm->embedding(current_ids);
     }
     VARP prev_hidden_states = param.outputs[mHiddenStateIndex];
-    
+
+    // Sample the first token from the prefill logits. The decode loop consumes
+    // mContext->current_token as drafts[0] and the MTP head embeds it to build
+    // the first draft; without this it stays -1 from init, which overflows the
+    // alpha table in DiskEmbedding::embedding (other speculative strategies do
+    // the same, e.g. dflash.cpp / eagle.cpp).
+    {
+        auto out0 = param.outputs[0];
+        auto info = out0->getInfo();
+        int vocabSize = info->dim[info->dim.size() - 1];
+        int validStart = (info->size > vocabSize) ? (info->size - vocabSize) : 0;
+        int validSize = vocabSize;
+        mContext->current_token = mLlm->sample(param.outputs[0], validStart, validSize);
+    }
+
     // generate first draft
     std::vector<int> mtp_draft(mLlm->mDraftLength);
     {

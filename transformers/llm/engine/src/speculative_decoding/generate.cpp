@@ -42,6 +42,7 @@ ArGeneration::ArGeneration(Llm* llm, std::shared_ptr<LlmContext> context, std::s
     // do nothing
 }
 void ArGeneration::generate(GenerationParams& param) {
+    MNN_PRINT("[DEBUG] ArGeneration::generate called\n");
     int max_token = param.max_new_tokens;
     int len = 0;
 #ifdef DUMP_PROFILE_INFO

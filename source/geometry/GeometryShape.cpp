@@ -82,7 +82,11 @@ public:
                 return false;
             }
         }
-        outputs[0]->host<int>()[0] = inputs[0]->buffer().dimensions;
+        int dims = inputs[0]->buffer().dimensions;
+        if (dims == 0) {
+            MNN_PRINT("[DEBUG] GeometryRank: input has 0 dimensions!\n");
+        }
+        outputs[0]->host<int>()[0] = dims;
         return true;
     }
 };

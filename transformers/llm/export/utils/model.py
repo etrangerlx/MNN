@@ -338,6 +338,11 @@ class LlmModel(PreTrainedModel):
                 model.talker = None
         if model_type == 'poi_qwen2_mtp':
             model.mtp = [model.mtp1, model.mtp2]
+        if model_type == 'qwen3_5' and model.mtp is None:
+            # HF transformers drops the mtp.* weights, build the head from checkpoint
+            from utils.mtp import build_qwen3_5_mtp
+            mtp_dtype = model.embed.embed.weight.dtype
+            model.mtp = build_qwen3_5_mtp(pretrained_model_name_or_path, mtp_dtype)
         if model.mtp is not None:
             from utils.mtp import Mtp
             model.mtp = Mtp.get_mtp(model_type)(model.mtp, model)

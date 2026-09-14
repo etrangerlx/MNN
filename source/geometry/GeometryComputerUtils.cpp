@@ -325,6 +325,17 @@ ErrorCode GeometryComputerUtils::shapeComputeAndGeometryTransform(
                 if (cpuRuntime->pCurrentStatus != NO_ERROR) {
                     return (ErrorCode)cpuRuntime->pCurrentStatus;
                 }
+                if (c.op->type() == MNN::OpType_BinaryOp) {
+                    auto main = c.op->main_as_BinaryOp();
+                    if (main->opType() == MNN::BinaryOpOperation_MOD && c.inputs.size() >= 2
+                        && c.inputs[0]->getType().code == halide_type_int
+                        && c.inputs[1]->getType().code == halide_type_int) {
+                        auto ptr0 = c.inputs[0]->host<int32_t>();
+                        auto ptr1 = c.inputs[1]->host<int32_t>();
+                        auto sz = c.inputs[0]->elementSize();
+                        auto sz1 = c.inputs[1]->elementSize();
+                    }
+                }
                 auto code = cp->execution->onExecute(c.inputs, c.outputs);
                 if (NO_ERROR != code) {
                     return NOT_SUPPORT;
