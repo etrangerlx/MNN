@@ -1,0 +1,15 @@
+{
+    "python-envs.pythonProjects": [],
+    // "cmake.cmakePath": "D:/SoftWare/cmake-4.3.0-windows-x86_64/bin/cmake.exe", //1. cmake configure 按 F1 快捷键；
+    // "cmake.generator": "Visual Studio 17 2022",
+    "cmake.configureSettings": {
+        "CMAKE_BUILD_TYPE": "Debug", //2. cmake buildtype Release or Debug
+        "MNN_BUILD_DEMO":"ON",
+        "MNN_BUILD_LLM":"ON",
+        "MNN_BUILD_CONVERTER":"ON",
+        "MNN_ARM82": "OFF",
+        "MNN_BUILD_TEST":"ON"
+        // "CMAKE_MSVC_RUNTIME_LIBRARY":"MultiThreadedDLL"
+    },
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+}

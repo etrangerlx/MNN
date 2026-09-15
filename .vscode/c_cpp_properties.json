@@ -1,0 +1,23 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/tools/converter/include",
+                "/mnt/d/SoftWare/qairt/2.45.0.260326/include/QNN"
+            ],
+            "defines": [
+                "MNN_QNN",
+                "ENABLE_QNN_ONLINE_FINALIZE"
+            ],
+            "compilerPath": "/usr/bin/clang",
+            "cStandard": "c17",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "linux-clang-x64",
+            "configurationProvider": "ms-vscode.cmake-tools"
+        }
+    ],
+    "version": 4
+}

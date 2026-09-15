@@ -1,0 +1,57 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "cpp-llm_demo",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/llm_demo",
+            "args": [
+                "/mnt/g/Models/Qwen3-VL-2B-Instruct-MNN/config.json","${workspaceFolder}/prompt.txt"],
+            "cwd": "${workspaceFolder}/build/",
+            // "preLaunchTask": "build",  // 先编译，后调试
+            // "MIMode": "gdb",
+            // "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "cpp-mls",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/mls",
+            "args": [
+                "run",
+                "--model", "${workspaceFolder}/transformers/llm/export/models/Qwen3.5-0.8B/config.json",
+                "-pf","${workspaceFolder}/prompt.txt"],
+            "cwd": "${workspaceFolder}/build/",
+            "preLaunchTask": "cmake build",  // 先编译，后调试
+            // "MIMode": "gdb",
+            // "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "py-llmconvertmnn",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/transformers/llm/export/llmexport.py",
+            "args": [
+                "--path","/mnt/g/Models/Qwen3.5-0.8B","--dst_path","./models/Qwen3.5-0.8B","--export", "mnn"],
+            "cwd": "${workspaceFolder}/transformers/llm/export/",
+
+        },
+        {
+                    "name": "py-mnn2qnn",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/transformers/llm/export/npu/generate_llm_qnn.py",
+            "args": [       
+                "--model","./models/Qwen3.5-0.8B","--dsp_arch=v68","--soc_id=39","--image_sizes", "224x224,384x384,512x512"],
+            "cwd": "${workspaceFolder}/transformers/llm/export/",
+            "env": {
+                "QNN_SDK_ROOT":"/mnt/d/SoftWare/qairt/2.45.0.260326",
+                "QNN_ROOT":"/mnt/d/SoftWare/qairt/2.45.0.260326"
+            }
+        }
+    ]
+}

@@ -274,9 +274,12 @@ static int run(int argc, const char *argv[]) {
         return 1;
     }
     arg = argv[2];
-    if (arg.find('-') != 0)
+    if (arg.find('--model') != 0)
     {
-        config_path = mls::FileUtils::GetConfigPath(arg);
+        if(argv[3] == nullptr) {
+            return 1;
+        }
+        config_path = std::string(argv[3]);
     }
     for (int i = 2; i < argc; i++)
     {

@@ -31,6 +31,7 @@ class Mtp(torch.nn.Module):
         mtps = {
             'mimo': MimoMtp,
             'poi_qwen2_mtp' : PoiQwenMtp,
+            'qwen3_5': Qwen3_5Mtp,
         }
         if model_type in mtps:
             return mtps[model_type]
@@ -78,6 +79,86 @@ class Mtp(torch.nn.Module):
 
     def forward(self, images):
         raise NotImplementedError
+
+
+class Qwen3_5Mtp(Mtp):
+    def __init__(self, mtp, base):
+        super().__init__(mtp, base)
+        # MTP has only 1 layer, override past_kv_shape
+        self.past_kv_shape = [1, 2, 1, 0, self.config.num_key_value_heads, self.config.head_dim]
+
+    def load(self):
+        self.mtp.eval()
+        self.pre_fc_norm_embedding = getattr(self.mtp, 'pre_fc_norm_embedding')
+        self.pre_fc_norm_hidden = getattr(self.mtp, 'pre_fc_norm_hidden')
+        self.fc = getattr(self.mtp, 'fc')
+        self.norm = getattr(self.mtp, 'norm')
+
+        # Get the single MTP decoder layer
+        decode_layer = getattr(self.mtp, 'layers')[0]
+        self.input_layernorm = getattr(decode_layer, 'input_layernorm')
+        self.post_attention_layernorm = getattr(decode_layer, 'post_attention_layernorm')
+        self.mlp = getattr(decode_layer, 'mlp')
+        self.self_attn = Attention(getattr(decode_layer, 'self_attn'), 0, self.config, self.rotary, self.config.model_map)
+
+    def unload_param(self):
+        def build_faker(real, name):
+            faker = FakeLinear(real.in_features, real.out_features, real.bias is not None, name)
+            self.unloaded_ops[name] = real
+            return faker
+        # replace linear with fakelinear to save export memory and time
+        with torch.no_grad():
+            if isinstance(self.num_attention_heads, list):
+                self.self_attn.export_fused_attn = True
+            for name, child in self.self_attn.named_children():
+                if isinstance(child, torch.nn.Linear):
+                    setattr(self.self_attn, name, build_faker(child, f'/mtp_layers.0/self_attn/{name}/Linear'))
+            for name, child in self.mlp.named_children():
+                if isinstance(child, torch.nn.Linear):
+                    setattr(self.mlp, name, build_faker(child, f'/mtp_layers.0/mlp/{name}/Linear'))
+            self.fc = build_faker(self.fc, f'/mtp/fc/Linear')
+
+    def forward(self,
+                input_embeds: torch.Tensor,
+                hidden_states: torch.Tensor,
+                attention_mask: torch.Tensor,
+                position_ids: torch.Tensor,
+                past_key_values: Optional[Tuple[torch.Tensor]] = None,
+                logits_index: int = -1
+                ):
+        input_embeds = input_embeds.view(1, -1, self.hidden_size)
+        hidden_states = hidden_states.view(1, -1, self.hidden_size)
+        hidden_states = hidden_states[:, 0 : input_embeds.size(1), :]
+
+        input_embeds = self.pre_fc_norm_embedding(input_embeds)
+        previous_hidden_states = self.pre_fc_norm_hidden(hidden_states)
+        hidden_states = self.fc(torch.cat([previous_hidden_states, input_embeds], dim=-1))
+
+        residual = hidden_states
+        hidden_states = self.input_layernorm(hidden_states)
+
+        rotary_pos_emb = self.rotary(position_ids)
+
+        # Self Attention - set KV cache via attribute, not argument
+        self.self_attn.past_key_value = past_key_values
+        hidden_states = self.self_attn(
+            hidden_states=hidden_states,
+            rotary_pos_emb=rotary_pos_emb,
+            attention_mask=attention_mask,
+        )
+        present_key_value = self.self_attn.past_key_value
+
+        hidden_states = residual + hidden_states
+        residual = hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states)
+        hidden_states = self.mlp(hidden_states)
+        hidden_states = residual + hidden_states
+
+        hidden_states = self.norm(hidden_states)
+        hidden_states = hidden_states[:, logits_index:, :]
+
+        logits = self.lm_(hidden_states)
+        return logits, present_key_value
 
 
 class MimoMtp(Mtp):
