@@ -1056,14 +1056,16 @@ class ModelMapper:
             'linear_key_head_dim': 'text_config.linear_key_head_dim',
             'linear_num_key_heads': 'text_config.linear_num_key_heads',
             'linear_num_value_heads': 'text_config.linear_num_value_heads',
-            'linear_value_head_dim': 'text_config.linear_value_head_dim'
+            'linear_value_head_dim': 'text_config.linear_value_head_dim',
+            'mtp_num_hidden_layers': 'text_config.mtp_num_hidden_layers'
         }
         qwen3_5_model = {
             'lm': 'lm_head',
             'embed': 'model.language_model.embed_tokens',
             'blocks': 'model.language_model.layers',
             'final_layernorm': 'model.language_model.norm',
-            'visual': 'model.visual'
+            'visual': 'model.visual',
+            'mtp': 'model.language_model.mtp'
         }
         qwen3_5_linear_attention = {
             'in_proj_qkv': 'in_proj_qkv',

@@ -351,6 +351,9 @@ class LlmExporter(torch.nn.Module):
                     "precision": "normal",
                     "memory": "low"
                 }
+            if self.mtp is not None:
+                config['speculative_type'] = 'mtp'
+                config['hidden_states'] = True
             if self.args.eagle_path is not None:
                 config['speculative_type'] = 'eagle'
                 config['hidden_states'] = True

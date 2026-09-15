@@ -49,6 +49,123 @@ class LlmModel(PreTrainedModel):
         for name, buffer in model.named_buffers():
             fill_tensor(name, buffer)
 
+    @staticmethod
+    def _load_qwen3_5_mtp(model_path, config):
+        """Load MTP weights for qwen3_5 from safetensors files and build a module."""
+        import json
+        import os
+        from safetensors import safe_open
+
+        # Load all mtp weights from safetensors files
+        mtp_weights = {}
+        index_path = os.path.join(model_path, 'model.safetensors.index.json')
+        if os.path.exists(index_path):
+            with open(index_path, 'r') as f:
+                index = json.load(f)
+            weight_map = index.get('weight_map', {})
+            mtp_files = set()
+            for key, filename in weight_map.items():
+                if key.startswith('mtp.'):
+                    mtp_files.add(filename)
+            for filename in mtp_files:
+                filepath = os.path.join(model_path, filename)
+                with safe_open(filepath, framework='pt') as f:
+                    for k in f.keys():
+                        if k.startswith('mtp.'):
+                            mtp_weights[k] = f.get_tensor(k)
+        else:
+            for filename in ['model.safetensors', 'pytorch_model.bin']:
+                filepath = os.path.join(model_path, filename)
+                if os.path.exists(filepath):
+                    if filepath.endswith('.safetensors'):
+                        with safe_open(filepath, framework='pt') as f:
+                            for k in f.keys():
+                                if k.startswith('mtp.'):
+                                    mtp_weights[k] = f.get_tensor(k)
+                    else:
+                        weights = torch.load(filepath, map_location='cpu')
+                        for k, v in weights.items():
+                            if k.startswith('mtp.'):
+                                mtp_weights[k] = v
+                    break
+
+        if not mtp_weights:
+            return None
+
+        hidden_size = config.hidden_size
+        head_dim = getattr(config, 'head_dim', config.hidden_size // config.num_attention_heads)
+        num_heads = config.num_attention_heads
+        num_kv_heads = config.num_key_value_heads
+        rms_norm_eps = getattr(config, 'rms_norm_eps', 1e-6)
+        origin_config = getattr(config, 'origin_config', None)
+        if origin_config is not None:
+            text_config = getattr(origin_config, 'text_config', origin_config)
+            intermediate_size = getattr(text_config, 'intermediate_size', hidden_size * 4)
+        else:
+            intermediate_size = hidden_size * 4
+
+        class Qwen3_5RMSNorm(torch.nn.Module):
+            def __init__(self, dim, eps=1e-6):
+                super().__init__()
+                self.eps = eps
+                self.weight = torch.nn.Parameter(torch.zeros(dim))
+            def forward(self, x):
+                input_dtype = x.dtype
+                x = x.to(torch.float32)
+                variance = x.pow(2).mean(-1, keepdim=True)
+                x = x * torch.rsqrt(variance + self.eps)
+                x = x.to(input_dtype) * (1 + self.weight)
+                return x
+
+        class Qwen3_5Mlp(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.gate_proj = torch.nn.Linear(hidden_size, intermediate_size, bias=False)
+                self.up_proj = torch.nn.Linear(hidden_size, intermediate_size, bias=False)
+                self.down_proj = torch.nn.Linear(intermediate_size, hidden_size, bias=False)
+            def forward(self, x):
+                return self.down_proj(torch.nn.functional.silu(self.gate_proj(x)) * self.up_proj(x))
+
+        class Qwen3_5SelfAttn(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.q_proj = torch.nn.Linear(hidden_size, num_heads * head_dim * 2, bias=False)
+                self.k_proj = torch.nn.Linear(hidden_size, num_kv_heads * head_dim, bias=False)
+                self.v_proj = torch.nn.Linear(hidden_size, num_kv_heads * head_dim, bias=False)
+                self.o_proj = torch.nn.Linear(num_heads * head_dim, hidden_size, bias=False)
+                self.q_norm = Qwen3_5RMSNorm(head_dim, eps=rms_norm_eps)
+                self.k_norm = Qwen3_5RMSNorm(head_dim, eps=rms_norm_eps)
+
+        class Qwen3_5MtpLayer(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.input_layernorm = Qwen3_5RMSNorm(hidden_size, eps=rms_norm_eps)
+                self.self_attn = Qwen3_5SelfAttn()
+                self.post_attention_layernorm = Qwen3_5RMSNorm(hidden_size, eps=rms_norm_eps)
+                self.mlp = Qwen3_5Mlp()
+
+        class Qwen3_5MtpModule(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.pre_fc_norm_embedding = Qwen3_5RMSNorm(hidden_size, eps=rms_norm_eps)
+                self.pre_fc_norm_hidden = Qwen3_5RMSNorm(hidden_size, eps=rms_norm_eps)
+                self.fc = torch.nn.Linear(hidden_size * 2, hidden_size, bias=False)
+                self.layers = torch.nn.ModuleList([Qwen3_5MtpLayer()])
+                self.norm = Qwen3_5RMSNorm(hidden_size, eps=rms_norm_eps)
+
+        mtp_module = Qwen3_5MtpModule()
+
+        # Load weights
+        for key, tensor in mtp_weights.items():
+            # Convert key like 'mtp.fc.weight' to Python path
+            parts = key.split('.')
+            obj = mtp_module
+            for part in parts[1:-1]:
+                obj = getattr(obj, part)
+            setattr(obj, parts[-1], torch.nn.Parameter(tensor, requires_grad=False))
+
+        return mtp_module
+
     def get_config(self):
         llm_config = {}
         models = ['visual', 'audio', 'talker']
@@ -149,6 +266,14 @@ class LlmModel(PreTrainedModel):
         model = cls(config, args)
 
         ModelMapper.do_map(model, original_model, config.model_map['model'])
+
+        # For qwen3_5, load MTP weights manually since transformers ignores them
+        if model_type == 'qwen3_5' and model.mtp is None:
+            mtp_num_hidden_layers = getattr(config, 'mtp_num_hidden_layers', None)
+            if mtp_num_hidden_layers is None:
+                mtp_num_hidden_layers = getattr(config, 'num_mtp_layers', None)
+            if mtp_num_hidden_layers is None or mtp_num_hidden_layers > 0:
+                model.mtp = cls._load_qwen3_5_mtp(pretrained_model_name_or_path, config)
 
         model.tokenizer = LlmTokenizer.from_pretrained(
             pretrained_model_name_or_path,

@@ -110,7 +110,7 @@ def _quant_dispatch(weight, quant_bit, quant_block, symmetric, awq, hqq):
     return _quant_on_device(weight, quant_bit, quant_block, symmetric, awq, hqq)
 
 # Max elements per chunk for quantization (avoid OOM on large embedding tables)
-_QUANT_MAX_ELEMENTS = 256 * 1024 * 1024  # 256M elements
+_QUANT_MAX_ELEMENTS = 64 * 1024 * 1024  # 256M elements
 
 def quant(weight, quant_bit, quant_block, symmetric, awq, hqq):
     oc, ic = weight.shape
