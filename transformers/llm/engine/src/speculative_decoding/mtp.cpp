@@ -120,6 +120,9 @@ std::vector<VARP> MtpGeneration::mtpForward(Express::VARP input_embeds, VARP hid
     
 void MtpGeneration::generate(GenerationParams& param) {
     int max_token = param.max_new_tokens;
+    if (mContext->current_token == -1 && !param.outputs.empty()) {
+        mContext->current_token = mLlm->sample(param.outputs[0], param.validLogitStart, param.validLogitSize);
+    }
     VARP input_embeds = param.input_embeds;
     if(input_embeds == nullptr && !param.input_ids.empty()) {
         auto input_ids = param.input_ids;
@@ -138,9 +141,10 @@ void MtpGeneration::generate(GenerationParams& param) {
         auto prefill_embeds = _Concat({pre_embeds[1], cur_embed}, 0);
 
         auto mtpDraft = mtpForward(prefill_embeds, prev_hidden_states);
-        
+
         auto sample_size = mtpDraft[0]->getInfo()->dim[mtpDraft[0]->getInfo()->dim.size() - 1];
-        for(int i = 0; i < mLlm->mDraftLength; i++) {
+        int num_logits = (mtpDraft[0]->getInfo()->dim.size() >= 2) ? mtpDraft[0]->getInfo()->dim[mtpDraft[0]->getInfo()->dim.size() - 2] : 1;
+        for(int i = 0; i < mLlm->mDraftLength && i < num_logits; i++) {
             auto sample_offset = i * sample_size;
             mtp_draft[i] = mLlm->sample(mtpDraft[0], sample_offset, sample_size);
         }
@@ -207,9 +211,13 @@ void MtpGeneration::generate(GenerationParams& param) {
                 mMtpMeta->remove         = drafts.size() - i_dft;
 
                 auto sample_size = mtpDraft[0]->getInfo()->dim[mtpDraft[0]->getInfo()->dim.size() - 1];
-                
+                int dim1 = (mtpDraft[0]->getInfo()->dim.size() >= 2) ? mtpDraft[0]->getInfo()->dim[1] : 1;
+
                 for(int i = 0; i < mLlm->mDraftLength; i++) {
-                    auto sample_offset = (i * mtpDraft[0]->getInfo()->dim[1] + i_dft - 1) * sample_size;
+                    auto sample_offset = (i * dim1 + i_dft - 1) * sample_size;
+                    if (sample_offset + sample_size > mtpDraft[0]->getInfo()->size) {
+                        break;
+                    }
                     mtp_draft[i] = mLlm->sample(mtpDraft[0], sample_offset, sample_size);
                 }
                 
