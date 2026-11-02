@@ -109,35 +109,57 @@ int main(int argc, const char* argv[]) {
         auto width = outputInfo->dim[2];
         auto height = outputInfo->dim[1];
         auto channel = outputInfo->dim[3];
-        std::shared_ptr<Tensor> wrapTensor(ImageProcess::createImageTensor<uint8_t>(width, height, 4, nullptr));
         MNN_PRINT("Mask: w=%d, h=%d, c=%d\n", width, height, channel);
         auto outputHostPtr = output->readMap<float>();
+        // Compute argmax class of each mask pixel, 8 == cat in PASCAL VOC
+        std::vector<uint8_t> maskClass(width * height, 0);
         for (int y = 0; y < height; ++y) {
-            auto rgbaY = wrapTensor->host<uint8_t>() + 4 * y * width;
             auto sourceY = outputHostPtr + y * width * channel;
             for (int x=0; x<width; ++x) {
                 auto sourceX = sourceY + channel * x;
                 int index = 0;
                 float maxValue = sourceX[0];
-                auto rgba = rgbaY + 4 * x;
                 for (int c=1; c<channel; ++c) {
                     if (sourceX[c] > maxValue) {
                         index = c;
                         maxValue = sourceX[c];
                     }
                 }
-                rgba[0] = 255;
-                rgba[2] = 0;
-                rgba[1] = 0;
-                rgba[3] = 255;
-                if (15 == index) {
-                    rgba[2] = 255;
-                    rgba[3] = 0;
-                }
+                maskClass[y * width + x] = (uint8_t)index;
             }
         }
         output->unMap();
-        stbi_write_png(argv[3], width, height, 4, wrapTensor->host<uint8_t>(), 4 * width);
+
+        int originW = 0, originH = 0, originC = 0;
+        auto originImage = stbi_load(argv[2], &originW, &originH, &originC, 4);
+        if (nullptr == originImage) {
+            MNN_ERROR("Can't open %s\n", argv[2]);
+            return 0;
+        }
+        std::shared_ptr<Tensor> wrapTensor(ImageProcess::createImageTensor<uint8_t>(originW, originH, 4, nullptr));
+        auto outPtr = wrapTensor->host<uint8_t>();
+        for (int y = 0; y < originH; ++y) {
+            // Nearest neighbor upsample the mask to origin size
+            auto maskY = maskClass.data() + (y * height / originH) * width;
+            for (int x=0; x<originW; ++x) {
+                auto sourceX = originImage + 4 * (y * originW + x);
+                auto rgba = outPtr + 4 * (y * originW + x);
+                if (8 == maskY[x * width / originW]) {
+                    // cat: transparent mask, keep origin pixel
+                    rgba[0] = sourceX[0];
+                    rgba[1] = sourceX[1];
+                    rgba[2] = sourceX[2];
+                } else {
+                    // other class: 50% red overlay on origin pixel
+                    rgba[0] = (uint8_t)(sourceX[0] * 0.5f + 255 * 0.5f);
+                    rgba[1] = (uint8_t)(sourceX[1] * 0.5f);
+                    rgba[2] = (uint8_t)(sourceX[2] * 0.5f);
+                }
+                rgba[3] = 255;
+            }
+        }
+        stbi_image_free(originImage);
+        stbi_write_png(argv[3], originW, originH, 4, outPtr, 4 * originW);
     }
     return 0;
 }

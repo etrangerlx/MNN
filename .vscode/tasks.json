@@ -1,0 +1,59 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "cmake configure (debug)",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "-S", "${workspaceFolder}",
+        "-B", "${workspaceFolder}/build",
+        "-DCMAKE_BUILD_TYPE=Debug",
+        "-DMNN_BUILD_SHARED_LIBS=ON",
+        "-DMNN_SEP_BUILD=ON",
+        "-DMNN_SUPPORT_TFLITE_QUAN=ON"
+      ],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "build MNN libs (debug)",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build", "${workspaceFolder}/build",
+        "--target", "MNN", "MNN_Express",
+        "--parallel"
+      ],
+      "dependsOn": ["cmake configure (debug)"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "build segment.out (debug)",
+      "type": "shell",
+      "command": "/usr/bin/c++",
+      "args": [
+        "-g", "-O0", "-std=gnu++11",
+        "-DMNN_SUPPORT_TFLITE_QUAN", "-DMNN_USE_SSE", "-DMNN_USE_THREAD_POOL",
+        "-I${workspaceFolder}/include", "-I${workspaceFolder}/source",
+        "-I${workspaceFolder}/schema/current", "-I${workspaceFolder}/3rd_party",
+        "-I${workspaceFolder}/3rd_party/flatbuffers/include",
+        "-I${workspaceFolder}/3rd_party/half",
+        "-I${workspaceFolder}/3rd_party/imageHelper",
+        "-I${workspaceFolder}/3rd_party/OpenCLHeaders",
+        "${workspaceFolder}/demo/exec/segment.cpp",
+        "-o", "${workspaceFolder}/build/segment.out",
+        "-rdynamic",
+        "${workspaceFolder}/build/express/libMNN_Express.so",
+        "${workspaceFolder}/build/libMNN.so",
+        "-pthread",
+        "-Wl,-rpath,${workspaceFolder}/build/express:${workspaceFolder}/build"
+      ],
+      "options": { "cwd": "${workspaceFolder}/build" },
+      "dependsOn": ["build MNN libs (debug)"],
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$gcc"]
+    }
+  ]
+}
