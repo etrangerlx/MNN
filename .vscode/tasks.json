@@ -11,7 +11,9 @@
         "-DCMAKE_BUILD_TYPE=Debug",
         "-DMNN_BUILD_SHARED_LIBS=ON",
         "-DMNN_SEP_BUILD=ON",
-        "-DMNN_SUPPORT_TFLITE_QUAN=ON"
+        "-DMNN_SUPPORT_TFLITE_QUAN=ON",
+        "-DMNN_BUILD_CONVERTER=ON",
+        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
       ],
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
@@ -23,6 +25,19 @@
       "args": [
         "--build", "${workspaceFolder}/build",
         "--target", "MNN", "MNN_Express",
+        "--parallel"
+      ],
+      "dependsOn": ["cmake configure (debug)"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "build MNNConvert (debug)",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build", "${workspaceFolder}/build",
+        "--target", "MNNConvert",
         "--parallel"
       ],
       "dependsOn": ["cmake configure (debug)"],

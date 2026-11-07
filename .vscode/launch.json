@@ -21,6 +21,29 @@
       ],
       "preLaunchTask": "build segment.out (debug)",
       "stopAtEntry": false
+    },
+    {
+      "name": "Debug MNNConvert (CAFFE / MobileNet V1)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/MNNConvert",
+      "args": [
+        "-f", "CAFFE",
+        "--modelFile", "${workspaceFolder}/resource/build/mobilenet_v1.caffe.caffemodel",
+        "--prototxt", "${workspaceFolder}/resource/build/mobilenet_v1.caffe.prototxt",
+        "--MNNModel", "${workspaceFolder}/build/mobilenet_v1.caffe.mnn",
+        "--bizCode", "0000"
+      ],
+      "cwd": "${workspaceFolder}/resource",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb",
+      "setupCommands": [
+        { "description": "Enable pretty-printing for gdb", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ],
+      "preLaunchTask": "build MNNConvert (debug)",
+      "stopAtEntry": false
     }
   ]
 }

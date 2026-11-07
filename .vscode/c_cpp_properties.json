@@ -1,0 +1,35 @@
+{
+  "version": 4,
+  "configurations": [
+    {
+      "name": "Linux",
+      "includePath": [
+        "${workspaceFolder}/include",
+        "${workspaceFolder}/source",
+        "${workspaceFolder}/express",
+        "${workspaceFolder}/schema/current",
+        "${workspaceFolder}/3rd_party",
+        "${workspaceFolder}/3rd_party/flatbuffers/include",
+        "${workspaceFolder}/3rd_party/half",
+        "${workspaceFolder}/3rd_party/imageHelper",
+        "${workspaceFolder}/3rd_party/OpenCLHeaders",
+        "${workspaceFolder}/3rd_party/rapidjson",
+        "${workspaceFolder}/demo",
+        "${workspaceFolder}/tools/cpp",
+        "${workspaceFolder}/tools/quantization",
+        "${workspaceFolder}/tools/converter/include",
+        "${workspaceFolder}/tools/converter/source/tflite/schema"
+      ],
+      "defines": [
+        "MNN_SUPPORT_TFLITE_QUAN",
+        "MNN_USE_SSE",
+        "MNN_USE_THREAD_POOL"
+      ],
+      "compilerPath": "/usr/bin/g++",
+      "cStandard": "gnu11",
+      "cppStandard": "gnu++11",
+      "intelliSenseMode": "linux-gcc-x64",
+      "compileCommands": "${workspaceFolder}/build/compile_commands.json"
+    }
+  ]
+}
