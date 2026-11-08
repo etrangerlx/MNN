@@ -13,7 +13,8 @@
         "-DMNN_SEP_BUILD=ON",
         "-DMNN_SUPPORT_TFLITE_QUAN=ON",
         "-DMNN_BUILD_CONVERTER=ON",
-        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+        "-DMNN_BUILD_TEST=ON"
       ],
       "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
